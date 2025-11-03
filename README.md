@@ -149,7 +149,7 @@ AWS_SECRET_ACCESS_KEY=YOUR_SECRET_ACCESS_KEY
   "name_prefix": "bpp",
   "key_name": "bpp-key",
   "instance_count": 2,
-  "ami": "ami-0abcdef1234567890",
+  "ami": "ami-0a25a306450a2cba3",
   "instance_type": "t3.micro",
   "user_data_inline": "#!/usr/bin/env bash\necho hello > /var/tmp/ok\n"
 }
@@ -163,14 +163,14 @@ AWS_SECRET_ACCESS_KEY=YOUR_SECRET_ACCESS_KEY
 curl -X POST http://localhost:8008/elb/deploy \
   -H "Content-Type: application/json" \
   -d '{
-    "region":"ap-southeast-2",
+    "region":"ap-southeast-2a",
     "vpc_cidr":"10.20.0.0/16",
     "subnet_cidr":"10.20.10.0/24",
     "az":"ap-southeast-2a",
     "name_prefix":"bpp",
     "key_name":"bpp-key",
     "instance_count":2,
-    "ami":"ami-0abcdef1234567890",
+    "ami":"ami-0a25a306450a2cba3",
     "instance_type":"t3.micro",
     "user_data_inline":"#!/usr/bin/env bash\\necho hello > /var/tmp/ok\\n"
   }'

@@ -4,8 +4,10 @@ from uuid import uuid4
 from pathlib import Path
 import subprocess, json
 from jinja2 import Environment, FileSystemLoader
+from backend.api.elb import router as elb_router
 
 app = FastAPI()
+app.include_router(elb_router)
 ROOT = Path(__file__).parent.resolve()
 TEMPLATES_DIR = ROOT / "templates"
 SCRIPTS_DIR = ROOT / "scripts"

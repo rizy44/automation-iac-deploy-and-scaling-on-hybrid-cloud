@@ -9,7 +9,7 @@ from typing import Dict, Any, Optional
 from jinja2 import Environment, FileSystemLoader, StrictUndefined
 from ..core.config import settings
 
-TEMPLATE_AWS_MAIN = "terraform/aws/main.tf.j2"
+TEMPLATE_AWS_MAIN = "main.tf.j2"
 
 def new_stack_id() -> str:
     ts = time.strftime("%Y%m%d%H%M%S")
@@ -92,6 +92,7 @@ def deploy_aws_from_template(payload: Dict[str, Any]) -> Dict[str, Any]:
     """
     stack_id = new_stack_id()
     workdir = settings.TF_WORK_ROOT / stack_id
+    workdir.mkdir(parents=True, exist_ok=True)
 
     user_data_path = payload.get("user_data_path")
     if not user_data_path and payload.get("user_data_inline"):
