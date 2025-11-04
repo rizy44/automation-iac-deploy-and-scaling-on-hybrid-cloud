@@ -5,9 +5,15 @@ from pathlib import Path
 import subprocess, json
 from jinja2 import Environment, FileSystemLoader
 from backend.api.elb import router as elb_router
+from backend.api.sdwan import router as sdwan_router
 
-app = FastAPI()
+app = FastAPI(
+    title="Hybrid Cloud Infrastructure API",
+    description="API for deploying and managing hybrid cloud infrastructure on AWS and OpenStack",
+    version="1.0.0"
+)
 app.include_router(elb_router)
+app.include_router(sdwan_router)
 ROOT = Path(__file__).parent.resolve()
 TEMPLATES_DIR = ROOT / "templates"
 SCRIPTS_DIR = ROOT / "scripts"

@@ -2,6 +2,17 @@
 
 > Hướng dẫn chạy **backend** sau khi `git pull`, dùng `.venv`, `.env`, và Terraform để render template **Jinja → Terraform** và deploy lên AWS.
 
+## 🆕 NEW: SD-WAN Hybrid Cloud Architecture
+
+**Kết nối OpenStack datacenter với AWS qua Site-to-Site VPN!**
+
+- ✅ Transit Gateway + Multi-VPC architecture
+- ✅ Site-to-Site VPN (2 tunnels for HA)
+- ✅ Auto Scaling Group + Application Load Balancer
+- ✅ Full documentation và setup scripts
+
+👉 **[Quick Start Guide](docs/QUICKSTART-SDWAN.md)** | **[Architecture Details](docs/sdwan-architecture.md)**
+
 ---
 
 ## 1) Yêu cầu hệ thống

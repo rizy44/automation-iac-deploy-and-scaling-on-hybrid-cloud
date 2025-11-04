@@ -1,0 +1,654 @@
+terraform {
+  required_version = ">= 1.6"
+  required_providers {
+    aws   = { source = "hashicorp/aws", version = ">= 5.0" }
+    local = { source = "hashicorp/local", version = ">= 2.0" }
+    random = { source = "hashicorp/random", version = ">= 3.0" }
+  }
+}
+
+provider "aws" {
+  region = "{{ region }}"
+}
+
+# ========================================
+# Variables from API
+# ========================================
+locals {
+  name_prefix         = "{{ name_prefix }}"
+  openstack_cidr      = "{{ openstack_cidr }}"
+  openstack_public_ip = "{{ openstack_public_ip }}"
+  
+  # VPC CIDRs
+  app_vpc_cidr        = "{{ app_vpc_cidr }}"
+  shared_vpc_cidr     = "{{ shared_vpc_cidr }}"
+  
+  # Availability Zones
+  azs = {{ azs | tojson }}
+  
+  # App configuration
+  app_ami             = "{{ app_ami }}"
+  app_instance_type   = "{{ app_instance_type }}"
+  app_min_size        = {{ app_min_size }}
+  app_max_size        = {{ app_max_size }}
+  app_desired_size    = {{ app_desired_size }}
+  
+  # VPN Configuration
+  vpn_preshared_key   = "{{ vpn_preshared_key }}"
+  
+  common_tags = {
+    Project     = local.name_prefix
+    Environment = "sdwan-hybrid"
+    ManagedBy   = "Terraform"
+  }
+}
+
+# ========================================
+# Transit Gateway (Central Hub)
+# ========================================
+resource "aws_ec2_transit_gateway" "main" {
+  description                     = "${local.name_prefix}-tgw"
+  amazon_side_asn                 = 64512
+  default_route_table_association = "enable"
+  default_route_table_propagation = "enable"
+  dns_support                     = "enable"
+  vpn_ecmp_support                = "enable"
+  
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-tgw"
+  })
+}
+
+# ========================================
+# Customer Gateway (OpenStack Side)
+# ========================================
+resource "aws_customer_gateway" "openstack" {
+  bgp_asn    = 65000
+  ip_address = local.openstack_public_ip
+  type       = "ipsec.1"
+  
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-cgw-openstack"
+  })
+}
+
+# ========================================
+# Site-to-Site VPN Connection
+# ========================================
+resource "aws_vpn_connection" "openstack" {
+  customer_gateway_id = aws_customer_gateway.openstack.id
+  transit_gateway_id  = aws_ec2_transit_gateway.main.id
+  type                = "ipsec.1"
+  
+  static_routes_only = false  # Use BGP for dynamic routing
+  
+  tunnel1_preshared_key = local.vpn_preshared_key
+  tunnel2_preshared_key = local.vpn_preshared_key
+  
+  tunnel1_inside_cidr = "169.254.10.0/30"
+  tunnel2_inside_cidr = "169.254.10.4/30"
+  
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-vpn-openstack"
+  })
+}
+
+# ========================================
+# App VPC
+# ========================================
+resource "aws_vpc" "app" {
+  cidr_block           = local.app_vpc_cidr
+  enable_dns_hostnames = true
+  enable_dns_support   = true
+  
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-app-vpc"
+  })
+}
+
+# Public subnets for ALB
+resource "aws_subnet" "app_public" {
+  count                   = length(local.azs)
+  vpc_id                  = aws_vpc.app.id
+  cidr_block              = cidrsubnet(local.app_vpc_cidr, 4, count.index)
+  availability_zone       = local.azs[count.index]
+  map_public_ip_on_launch = true
+  
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-app-public-${local.azs[count.index]}"
+    Tier = "Public"
+  })
+}
+
+# Private subnets for EC2 instances
+resource "aws_subnet" "app_private" {
+  count             = length(local.azs)
+  vpc_id            = aws_vpc.app.id
+  cidr_block        = cidrsubnet(local.app_vpc_cidr, 4, count.index + length(local.azs))
+  availability_zone = local.azs[count.index]
+  
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-app-private-${local.azs[count.index]}"
+    Tier = "Private"
+  })
+}
+
+# Internet Gateway for App VPC
+resource "aws_internet_gateway" "app" {
+  vpc_id = aws_vpc.app.id
+  
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-app-igw"
+  })
+}
+
+# NAT Gateway for private subnets
+resource "aws_eip" "nat" {
+  count  = length(local.azs)
+  domain = "vpc"
+  
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-nat-eip-${local.azs[count.index]}"
+  })
+  
+  depends_on = [aws_internet_gateway.app]
+}
+
+resource "aws_nat_gateway" "app" {
+  count         = length(local.azs)
+  allocation_id = aws_eip.nat[count.index].id
+  subnet_id     = aws_subnet.app_public[count.index].id
+  
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-nat-${local.azs[count.index]}"
+  })
+}
+
+# Route Table for Public Subnets
+resource "aws_route_table" "app_public" {
+  vpc_id = aws_vpc.app.id
+  
+  route {
+    cidr_block = "0.0.0.0/0"
+    gateway_id = aws_internet_gateway.app.id
+  }
+  
+  route {
+    cidr_block         = local.openstack_cidr
+    transit_gateway_id = aws_ec2_transit_gateway.main.id
+  }
+  
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-app-public-rt"
+  })
+}
+
+resource "aws_route_table_association" "app_public" {
+  count          = length(local.azs)
+  subnet_id      = aws_subnet.app_public[count.index].id
+  route_table_id = aws_route_table.app_public.id
+}
+
+# Route Tables for Private Subnets
+resource "aws_route_table" "app_private" {
+  count  = length(local.azs)
+  vpc_id = aws_vpc.app.id
+  
+  route {
+    cidr_block     = "0.0.0.0/0"
+    nat_gateway_id = aws_nat_gateway.app[count.index].id
+  }
+  
+  route {
+    cidr_block         = local.openstack_cidr
+    transit_gateway_id = aws_ec2_transit_gateway.main.id
+  }
+  
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-app-private-rt-${local.azs[count.index]}"
+  })
+}
+
+resource "aws_route_table_association" "app_private" {
+  count          = length(local.azs)
+  subnet_id      = aws_subnet.app_private[count.index].id
+  route_table_id = aws_route_table.app_private[count.index].id
+}
+
+# Transit Gateway Attachment for App VPC
+resource "aws_ec2_transit_gateway_vpc_attachment" "app" {
+  transit_gateway_id = aws_ec2_transit_gateway.main.id
+  vpc_id             = aws_vpc.app.id
+  subnet_ids         = aws_subnet.app_private[*].id
+  
+  dns_support                                     = "enable"
+  transit_gateway_default_route_table_association = true
+  transit_gateway_default_route_table_propagation = true
+  
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-app-tgw-attachment"
+  })
+}
+
+# ========================================
+# Shared Services VPC
+# ========================================
+resource "aws_vpc" "shared" {
+  cidr_block           = local.shared_vpc_cidr
+  enable_dns_hostnames = true
+  enable_dns_support   = true
+  
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-shared-vpc"
+  })
+}
+
+resource "aws_subnet" "shared_private" {
+  count             = length(local.azs)
+  vpc_id            = aws_vpc.shared.id
+  cidr_block        = cidrsubnet(local.shared_vpc_cidr, 4, count.index)
+  availability_zone = local.azs[count.index]
+  
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-shared-private-${local.azs[count.index]}"
+  })
+}
+
+# Route Table for Shared Services VPC
+resource "aws_route_table" "shared" {
+  vpc_id = aws_vpc.shared.id
+  
+  route {
+    cidr_block         = local.openstack_cidr
+    transit_gateway_id = aws_ec2_transit_gateway.main.id
+  }
+  
+  route {
+    cidr_block         = local.app_vpc_cidr
+    transit_gateway_id = aws_ec2_transit_gateway.main.id
+  }
+  
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-shared-rt"
+  })
+}
+
+resource "aws_route_table_association" "shared" {
+  count          = length(local.azs)
+  subnet_id      = aws_subnet.shared_private[count.index].id
+  route_table_id = aws_route_table.shared.id
+}
+
+# Transit Gateway Attachment for Shared VPC
+resource "aws_ec2_transit_gateway_vpc_attachment" "shared" {
+  transit_gateway_id = aws_ec2_transit_gateway.main.id
+  vpc_id             = aws_vpc.shared.id
+  subnet_ids         = aws_subnet.shared_private[*].id
+  
+  dns_support                                     = "enable"
+  transit_gateway_default_route_table_association = true
+  transit_gateway_default_route_table_propagation = true
+  
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-shared-tgw-attachment"
+  })
+}
+
+# ========================================
+# Security Groups
+# ========================================
+
+# ALB Security Group
+resource "aws_security_group" "alb" {
+  name        = "${local.name_prefix}-alb-sg"
+  description = "Security group for Application Load Balancer"
+  vpc_id      = aws_vpc.app.id
+  
+  ingress {
+    description = "HTTP from Internet"
+    from_port   = 80
+    to_port     = 80
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+  
+  ingress {
+    description = "HTTPS from Internet"
+    from_port   = 443
+    to_port     = 443
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+  
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+  
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-alb-sg"
+  })
+}
+
+# App Instance Security Group
+resource "aws_security_group" "app_instance" {
+  name        = "${local.name_prefix}-app-instance-sg"
+  description = "Security group for App EC2 instances"
+  vpc_id      = aws_vpc.app.id
+  
+  ingress {
+    description     = "HTTP from ALB"
+    from_port       = 80
+    to_port         = 80
+    protocol        = "tcp"
+    security_groups = [aws_security_group.alb.id]
+  }
+  
+  ingress {
+    description = "HTTP from OpenStack"
+    from_port   = 80
+    to_port     = 80
+    protocol    = "tcp"
+    cidr_blocks = [local.openstack_cidr]
+  }
+  
+  ingress {
+    description = "SSH from OpenStack"
+    from_port   = 22
+    to_port     = 22
+    protocol    = "tcp"
+    cidr_blocks = [local.openstack_cidr]
+  }
+  
+  ingress {
+    description = "All traffic from Shared VPC"
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = [local.shared_vpc_cidr]
+  }
+  
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+  
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-app-instance-sg"
+  })
+}
+
+# ========================================
+# Application Load Balancer
+# ========================================
+resource "aws_lb" "app" {
+  name               = "${local.name_prefix}-alb"
+  internal           = false
+  load_balancer_type = "application"
+  security_groups    = [aws_security_group.alb.id]
+  subnets            = aws_subnet.app_public[*].id
+  
+  enable_deletion_protection = false
+  enable_http2               = true
+  
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-alb"
+  })
+}
+
+resource "aws_lb_target_group" "app" {
+  name     = "${local.name_prefix}-tg"
+  port     = 80
+  protocol = "HTTP"
+  vpc_id   = aws_vpc.app.id
+  
+  health_check {
+    enabled             = true
+    healthy_threshold   = 2
+    unhealthy_threshold = 2
+    timeout             = 5
+    interval            = 30
+    path                = "/"
+    protocol            = "HTTP"
+    matcher             = "200"
+  }
+  
+  deregistration_delay = 30
+  
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-tg"
+  })
+}
+
+resource "aws_lb_listener" "http" {
+  load_balancer_arn = aws_lb.app.arn
+  port              = 80
+  protocol          = "HTTP"
+  
+  default_action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.app.arn
+  }
+}
+
+# ========================================
+# Launch Template & Auto Scaling Group
+# ========================================
+resource "aws_launch_template" "app" {
+  name_prefix   = "${local.name_prefix}-lt-"
+  image_id      = local.app_ami
+  instance_type = local.app_instance_type
+  
+  vpc_security_group_ids = [aws_security_group.app_instance.id]
+  
+  user_data = base64encode(<<-EOF
+              #!/bin/bash
+              set -euxo pipefail
+              
+              # Update system
+              if command -v apt-get >/dev/null 2>&1; then
+                apt-get update -y
+                apt-get install -y nginx
+                systemctl enable nginx
+                systemctl start nginx
+              elif command -v yum >/dev/null 2>&1; then
+                yum install -y nginx || amazon-linux-extras install -y nginx1
+                systemctl enable nginx
+                systemctl start nginx
+              fi
+              
+              # Create simple web page
+              INSTANCE_ID=$(ec2-metadata --instance-id | cut -d " " -f 2)
+              AZ=$(ec2-metadata --availability-zone | cut -d " " -f 2)
+              
+              cat > /var/www/html/index.html <<HTML
+              <!DOCTYPE html>
+              <html>
+              <head>
+                <title>SD-WAN Hybrid Cloud</title>
+                <style>
+                  body { font-family: Arial; text-align: center; padding: 50px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; }
+                  .container { background: rgba(255,255,255,0.1); padding: 40px; border-radius: 10px; }
+                  h1 { font-size: 3em; margin-bottom: 20px; }
+                  .info { font-size: 1.2em; margin: 10px 0; }
+                </style>
+              </head>
+              <body>
+                <div class="container">
+                  <h1>SD-WAN Hybrid Cloud Architecture</h1>
+                  <div class="info">Instance ID: <strong>$INSTANCE_ID</strong></div>
+                  <div class="info">Availability Zone: <strong>$AZ</strong></div>
+                  <div class="info">VPC: <strong>App VPC</strong></div>
+                  <div class="info">Connected to: <strong>OpenStack Datacenter (172.10.0.0/16)</strong></div>
+                </div>
+              </body>
+              </html>
+HTML
+              
+              # Create health check endpoint
+              echo "healthy" > /usr/share/nginx/html/health || echo "healthy" > /var/www/html/health
+              EOF
+  )
+  
+  tag_specifications {
+    resource_type = "instance"
+    tags = merge(local.common_tags, {
+      Name = "${local.name_prefix}-app-instance"
+    })
+  }
+  
+  lifecycle {
+    create_before_destroy = true
+  }
+}
+
+resource "aws_autoscaling_group" "app" {
+  name                = "${local.name_prefix}-asg"
+  vpc_zone_identifier = aws_subnet.app_private[*].id
+  target_group_arns   = [aws_lb_target_group.app.arn]
+  
+  min_size         = local.app_min_size
+  max_size         = local.app_max_size
+  desired_capacity = local.app_desired_size
+  
+  health_check_type         = "ELB"
+  health_check_grace_period = 300
+  
+  launch_template {
+    id      = aws_launch_template.app.id
+    version = "$Latest"
+  }
+  
+  tag {
+    key                 = "Name"
+    value               = "${local.name_prefix}-app-asg-instance"
+    propagate_at_launch = true
+  }
+  
+  dynamic "tag" {
+    for_each = local.common_tags
+    content {
+      key                 = tag.key
+      value               = tag.value
+      propagate_at_launch = true
+    }
+  }
+}
+
+# ========================================
+# VPN Configuration Export
+# ========================================
+resource "local_file" "vpn_config" {
+  content = templatefile("${path.module}/vpn-config.tpl", {
+    tunnel1_address           = aws_vpn_connection.openstack.tunnel1_address
+    tunnel2_address           = aws_vpn_connection.openstack.tunnel2_address
+    tunnel1_cgw_inside_address = aws_vpn_connection.openstack.tunnel1_cgw_inside_address
+    tunnel2_cgw_inside_address = aws_vpn_connection.openstack.tunnel2_cgw_inside_address
+    tunnel1_vgw_inside_address = aws_vpn_connection.openstack.tunnel1_vgw_inside_address
+    tunnel2_vgw_inside_address = aws_vpn_connection.openstack.tunnel2_vgw_inside_address
+    tunnel1_preshared_key     = local.vpn_preshared_key
+    tunnel2_preshared_key     = local.vpn_preshared_key
+    aws_bgp_asn               = 64512
+    customer_bgp_asn          = 65000
+    openstack_cidr            = local.openstack_cidr
+  })
+  filename        = "${path.module}/vpn-configuration.txt"
+  file_permission = "0600"
+}
+
+resource "local_file" "vpn_config_json" {
+  content = jsonencode({
+    tunnel1 = {
+      address            = aws_vpn_connection.openstack.tunnel1_address
+      inside_cidr        = "169.254.10.0/30"
+      customer_inside_ip = aws_vpn_connection.openstack.tunnel1_cgw_inside_address
+      aws_inside_ip      = aws_vpn_connection.openstack.tunnel1_vgw_inside_address
+      preshared_key      = local.vpn_preshared_key
+    }
+    tunnel2 = {
+      address            = aws_vpn_connection.openstack.tunnel2_address
+      inside_cidr        = "169.254.10.4/30"
+      customer_inside_ip = aws_vpn_connection.openstack.tunnel2_cgw_inside_address
+      aws_inside_ip      = aws_vpn_connection.openstack.tunnel2_vgw_inside_address
+      preshared_key      = local.vpn_preshared_key
+    }
+    bgp = {
+      aws_asn      = 64512
+      customer_asn = 65000
+    }
+    routing = {
+      openstack_cidr = local.openstack_cidr
+      app_vpc_cidr   = local.app_vpc_cidr
+      shared_vpc_cidr = local.shared_vpc_cidr
+    }
+  })
+  filename        = "${path.module}/vpn-configuration.json"
+  file_permission = "0600"
+}
+
+# ========================================
+# Outputs
+# ========================================
+output "transit_gateway_id" {
+  description = "ID of the Transit Gateway"
+  value       = aws_ec2_transit_gateway.main.id
+}
+
+output "vpn_connection_id" {
+  description = "ID of the VPN Connection"
+  value       = aws_vpn_connection.openstack.id
+}
+
+output "vpn_tunnel1_address" {
+  description = "Public IP of VPN Tunnel 1"
+  value       = aws_vpn_connection.openstack.tunnel1_address
+}
+
+output "vpn_tunnel2_address" {
+  description = "Public IP of VPN Tunnel 2"
+  value       = aws_vpn_connection.openstack.tunnel2_address
+}
+
+output "alb_dns_name" {
+  description = "DNS name of the Application Load Balancer"
+  value       = aws_lb.app.dns_name
+}
+
+output "alb_url" {
+  description = "URL to access the application"
+  value       = "http://${aws_lb.app.dns_name}"
+}
+
+output "app_vpc_id" {
+  description = "ID of the App VPC"
+  value       = aws_vpc.app.id
+}
+
+output "shared_vpc_id" {
+  description = "ID of the Shared Services VPC"
+  value       = aws_vpc.shared.id
+}
+
+output "vpn_configuration_file" {
+  description = "Path to VPN configuration file"
+  value       = local_file.vpn_config.filename
+}
+
+output "vpn_configuration" {
+  description = "VPN Configuration for OpenStack Edge"
+  value = {
+    tunnel1_address = aws_vpn_connection.openstack.tunnel1_address
+    tunnel2_address = aws_vpn_connection.openstack.tunnel2_address
+    preshared_key   = local.vpn_preshared_key
+    bgp_asn = {
+      aws      = 64512
+      customer = 65000
+    }
+  }
+  sensitive = true
+}
+

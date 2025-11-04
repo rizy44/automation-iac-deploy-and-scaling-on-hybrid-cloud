@@ -1,0 +1,8 @@
+- name: Deploy OpenStack via Kolla-Ansible (multinode)
+  hosts: localhost
+  tasks:
+    - name: Run Kolla-Ansible deploy
+      command: kolla-ansible -i ~/kolla/inventory/multinode deploy
+
+- name: Provision AWS resources
+  import_playbook: aws_provision.yml

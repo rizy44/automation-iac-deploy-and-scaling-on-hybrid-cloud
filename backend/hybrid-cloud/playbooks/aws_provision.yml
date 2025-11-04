@@ -1,0 +1,36 @@
+- name: Provision AWS infrastructure
+  hosts: localhost
+  gather_facts: false
+  collections:
+    - amazon.aws
+
+  vars_files:
+    - ../group_vars/aws.yml
+
+  tasks:
+    - name: Create VPC
+      ec2_vpc_net:
+        name: hybrid-vpc
+        cidr_block: "{{ vpc_cidr }}"
+        region: "{{ region }}"
+        state: present
+      register: vpc
+
+    - name: Create subnet
+      ec2_vpc_subnet:
+        vpc_id: "{{ vpc.vpc.id }}"
+        cidr: "{{ subnet_cidr }}"
+        az: "{{ az }}"
+        state: present
+      register: subnet
+
+    - name: Launch EC2 instance
+      ec2_instance:
+        name: "hybrid-bastion"
+        key_name: "{{ keypair }}"
+        instance_type: "{{ instance_type }}"
+        image_id: "{{ ami_id }}"
+        region: "{{ region }}"
+        vpc_subnet_id: "{{ subnet.subnet.id }}"
+        wait: true
+      register: ec2
