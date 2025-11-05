@@ -3,3 +3,5 @@ uvicorn
 python-dotenv
 jinja2
 pydantic>=2
+requests>=2.31.0
+apscheduler>=3.10.4

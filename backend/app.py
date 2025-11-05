@@ -6,14 +6,29 @@ import subprocess, json
 from jinja2 import Environment, FileSystemLoader
 from backend.api.elb import router as elb_router
 from backend.api.sdwan import router as sdwan_router
+from backend.api.scaling import router as scaling_router
+from backend.services.scheduler import start_scheduler, stop_scheduler
 
 app = FastAPI(
     title="Hybrid Cloud Infrastructure API",
-    description="API for deploying and managing hybrid cloud infrastructure on AWS and OpenStack",
+    description="API for deploying and managing hybrid cloud infrastructure on AWS and OpenStack with AI-powered auto-scaling",
     version="1.0.0"
 )
 app.include_router(elb_router)
 app.include_router(sdwan_router)
+app.include_router(scaling_router)
+
+
+@app.on_event("startup")
+async def startup_event():
+    """Initialize scheduler on application startup"""
+    start_scheduler()
+
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    """Gracefully shutdown scheduler on application shutdown"""
+    stop_scheduler()
 ROOT = Path(__file__).parent.resolve()
 TEMPLATES_DIR = ROOT / "templates"
 SCRIPTS_DIR = ROOT / "scripts"

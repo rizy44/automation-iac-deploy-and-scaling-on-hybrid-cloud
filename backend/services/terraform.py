@@ -291,6 +291,17 @@ echo "Monitoring stack ready: Grafana (admin/admin), Loki (/loki), Mimir (/mimir
 
     render_tf(TEMPLATE_AWS_MAIN, context, workdir)
 
+    # Save deployment context for future scaling operations
+    metadata = {
+        "stack_id": stack_id,
+        "deployed_at": time.strftime("%Y-%m-%d %H:%M:%S"),
+        "context": context,
+        "region": region
+    }
+    metadata_file = workdir / "deploy_metadata.json"
+    with open(metadata_file, 'w') as f:
+        json.dump(metadata, f, indent=2)
+
     try:
         aws_env = build_aws_env(region=region)
     except RuntimeError as e:

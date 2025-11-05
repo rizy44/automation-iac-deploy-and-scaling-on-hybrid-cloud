@@ -25,5 +25,15 @@ class Settings:
     AWS_ACCESS_KEY_ID: str | None = os.getenv("AWS_ACCESS_KEY_ID")
     AWS_SECRET_ACCESS_KEY: str | None = os.getenv("AWS_SECRET_ACCESS_KEY")
 
+    # ==== AI ADVISOR ====
+    GEMINI_API_KEY: str | None = os.getenv("GEMINI_API_KEY")
+
+    # ==== SCALING CONFIGURATION ====
+    AUTO_SCALING_ENABLED: bool = os.getenv("AUTO_SCALING_ENABLED", "false").lower() == "true"
+    AUTO_SCALING_INTERVAL_MINUTES: int = int(os.getenv("AUTO_SCALING_INTERVAL_MINUTES", "5"))
+    AUTO_SCALING_CONFIDENCE_THRESHOLD: float = float(os.getenv("AUTO_SCALING_CONFIDENCE_THRESHOLD", "0.7"))
+    SCALE_UP_MAX_INSTANCES: int = int(os.getenv("SCALE_UP_MAX_INSTANCES", "20"))
+    SCALE_DOWN_MIN_INSTANCES: int = int(os.getenv("SCALE_DOWN_MIN_INSTANCES", "1"))
+
 settings = Settings()
 settings.TF_WORK_ROOT.mkdir(parents=True, exist_ok=True)

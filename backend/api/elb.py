@@ -16,7 +16,7 @@ class DeployReq(BaseModel):
     instance_type: str
     user_data_inline: str | None = None
     user_data_path: str | None = None
-        auto_install_monitoring: bool = True  # NEW: tự cài Grafana+Mimir+Loki nếu không có user_data_inline
+    auto_install_monitoring: bool = True  # NEW: tự cài Grafana+Mimir+Loki nếu không có user_data_inline
 
 @router.post("/deploy")
 def deploy(req: DeployReq):

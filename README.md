@@ -174,7 +174,7 @@ AWS_SECRET_ACCESS_KEY=YOUR_SECRET_ACCESS_KEY
 curl -X POST http://localhost:8008/elb/deploy \
   -H "Content-Type: application/json" \
   -d '{
-    "region":"ap-southeast-2a",
+    "region":"ap-southeast-2",
     "vpc_cidr":"10.20.0.0/16",
     "subnet_cidr":"10.20.10.0/24",
     "az":"ap-southeast-2a",
