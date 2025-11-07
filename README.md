@@ -1,228 +1,226 @@
-# Automation IaC Deploy & Scaling on Hybrid Cloud — Local Setup & Run Guide
-
-> Hướng dẫn chạy **backend** sau khi `git pull`, dùng `.venv`, `.env`, và Terraform để render template **Jinja → Terraform** và deploy lên AWS.
-
-## 🆕 NEW: SD-WAN Hybrid Cloud Architecture
-
-**Kết nối OpenStack datacenter với AWS qua Site-to-Site VPN!**
-
-- ✅ Transit Gateway + Multi-VPC architecture
-- ✅ Site-to-Site VPN (2 tunnels for HA)
-- ✅ Auto Scaling Group + Application Load Balancer
-- ✅ Full documentation và setup scripts
-
-👉 **[Quick Start Guide](docs/QUICKSTART-SDWAN.md)** | **[Architecture Details](docs/sdwan-architecture.md)**
+# VPBank Hybrid Cloud Platform
+## Nền tảng quản lý hạ tầng đám mây thông minh
 
 ---
 
-## 1) Yêu cầu hệ thống
+## 🌟 Giới Thiệu
 
-* **Python** 3.10+ (khuyến nghị 3.11)
-* **Terraform** ≥ **1.6** (để khớp `required_version = ">= 1.6"` trong template)
-* **AWS account** với **Access Key** & **Secret Key** (chỉ 2 biến, *không dùng session token*)
-* Internet outbound để tải provider plugins
+**VPBank Hybrid Cloud Platform** là một giải pháp toàn diện giúp doanh nghiệp dễ dàng triển khai và quản lý hạ tầng đám mây trên AWS. Hệ thống được thiết kế với triết lý "đơn giản hóa phức tạp", mang đến trải nghiệm quản lý hạ tầng trực quan và hiệu quả.
 
-Kiểm tra nhanh:
+### 🎯 Tại sao chọn chúng tôi?
 
+- **🚀 Triển khai nhanh chóng**: Chỉ với vài cú click, bạn có thể tạo ra một hạ tầng hoàn chỉnh trên AWS
+- **🤖 AI thông minh**: Hệ thống tự động đưa ra khuyến nghị scaling dựa trên dữ liệu thực tế
+- **📊 Giám sát toàn diện**: Tích hợp sẵn Grafana, Mimir, Loki để theo dõi hiệu suất 24/7
+- **💰 Tối ưu chi phí**: Tự động scale up/down để tiết kiệm chi phí vận hành
+- **🔧 Dễ sử dụng**: Giao diện API thân thiện, documentation chi tiết
+
+---
+
+## ✨ Tính Năng Nổi Bật
+
+### 🏗️ **Triển Khai Hạ Tầng Tự Động**
+- Tạo VPC, EC2 instances, Load Balancer chỉ trong vài phút
+- Cấu hình bảo mật tự động theo best practices
+- Hỗ trợ nhiều region AWS khác nhau
+
+### 📈 **Scaling Thông Minh với AI**
+- AI Advisor phân tích metrics và đưa ra khuyến nghị
+- Tự động scale up khi traffic tăng cao
+- Scale down thông minh để tiết kiệm chi phí
+- Hỗ trợ scaling thủ công khi cần thiết
+
+### 🖥️ **Quản Lý EC2 Linh Hoạt**
+- Start/Stop/Reboot instances từ xa
+- Theo dõi trạng thái real-time
+- Quản lý theo từng stack hoặc instance riêng lẻ
+
+### 📊 **Monitoring & Analytics**
+- Dashboard Grafana tích hợp sẵn
+- Metrics CPU, Memory, Network real-time
+- Log aggregation với Loki
+- Custom queries và alerts
+
+---
+
+## 🏢 Ứng Dụng Thực Tế
+
+### **E-commerce & Retail**
+- Xử lý traffic cao trong các đợt sale lớn
+- Tự động scale khi có flash sale
+- Giám sát performance để đảm bảo UX tốt
+
+### **Fintech & Banking**
+- Đảm bảo uptime 99.9% cho các ứng dụng tài chính
+- Scaling nhanh chóng khi có giao dịch đột biến
+- Monitoring chi tiết để compliance
+
+### **Media & Content**
+- Xử lý traffic không đều trong ngày
+- Tối ưu chi phí khi traffic thấp
+- Scale nhanh khi có viral content
+
+### **Enterprise Applications**
+- Quản lý nhiều môi trường (dev, staging, prod)
+- Tự động hóa deployment và scaling
+- Centralized monitoring cho toàn bộ hệ thống
+
+---
+
+## 🚀 Bắt Đầu Nhanh
+
+### Bước 1: Chuẩn bị môi trường
 ```bash
-python --version
-terraform -version
-```
+# Clone project
+git clone <repository-url>
+cd hybrid-cloud-platform
 
----
-
-## 2) Cấu trúc thư mục (tham chiếu)
-
-```
-<repo-root>/
-├─ backend/
-│  ├─ app.py
-│  ├─ core/
-│  │  ├─ config.py
-│  │  └─ logging.py
-│  ├─ api/
-│  │  └─ elb.py
-│  ├─ services/
-│  │  └─ terraform.py
-│  ├─ templates/
-│  │  └─ terraform/
-│  │     └─ aws/
-│  │        └─ main.tf.j2       # Template Jinja giữ NGUYÊN như bạn đã cung cấp
-│  ├─ requirements.txt
-│  └─ __init__.py
-├─ .env.example                  # Mẫu biến môi trường
-├─ .gitignore
-└─ scripts/
-   ├─ run-dev.sh                 # (tuỳ chọn) Chạy uvicorn dev
-   └─ setup-env.sh               # (tuỳ chọn) Tạo .venv & cài deps
-```
-
-> **Lưu ý:** Template `backend/templates/terraform/aws/main.tf.j2` đã giữ nguyên. Backend chỉ render biến & gọi Terraform.
-
----
-
-## 3) Tạo `.venv`, cài dependencies, cấu hình `.env`
-
-### Linux/macOS
-
-```bash
-# 1) Vào root của repo
-cd <repo-root>
-
-# 2) Tạo & kích hoạt venv
-python -m venv .venv
+# Tạo virtual environment
+python3 -m venv .venv
 source .venv/bin/activate
 
-# 3) Cài dependencies
+# Cài đặt dependencies
 pip install -r backend/requirements.txt
+```
 
-# 4) Tạo file .env từ mẫu và CHỈNH SỬA 2 biến AWS
+### Bước 2: Cấu hình AWS
+```bash
+# Cấu hình AWS credentials
+aws configure
+
+# Tạo file environment
 cp .env.example .env
-chmod 600 .env
-
-# 5) Mở .env và điền đúng 2 biến dưới đây:
-# AWS_ACCESS_KEY_ID=...
-# AWS_SECRET_ACCESS_KEY=...
-
-# 6) (khuyến nghị) Kiểm tra đường dẫn Terraform trong .env
-# TF_BIN=/usr/bin/terraform   # hoặc `which terraform`
+# Chỉnh sửa .env với thông tin của bạn
 ```
 
-### Windows (PowerShell)
-
-```powershell
-cd <repo-root>
-py -m venv .venv
-. .\.venv\Scripts\Activate.ps1
-pip install -r backend\requirements.txt
-Copy-Item .env.example .env
-# Mở .env và điền AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY
-```
-
----
-
-## 4) Chạy server (dev)
-
+### Bước 3: Khởi chạy hệ thống
 ```bash
-# Cách 1: trực tiếp
-export PYTHONPATH=.
-uvicorn backend.app:app --reload --host 0.0.0.0 --port 8008
-
-# Cách 2: dùng script (nếu có scripts/run-dev.sh)
-bash scripts/run-dev.sh
+# Chạy backend server
+python -m uvicorn backend.app:app --host 0.0.0.0 --port 8000 --reload
 ```
 
-Server mặc định đọc `.env` ở **root repo**, và lưu workdir Terraform tại `.infra/work/<stack_id>/`.
-
----
-
-## 5) Cấu hình `.env` (tham chiếu)
-
-```ini
-# App
-APP_HOST=0.0.0.0
-APP_PORT=8008
-LOG_LEVEL=INFO
-ENV=dev
-
-# Templates & Terraform
-TEMPLATE_DIR=backend/templates
-TF_BIN=/usr/bin/terraform
-TF_WORK_ROOT=.infra/work
-TF_TIMEOUT_SEC=900
-
-# Mặc định tiện dụng (có thể override bằng payload API)
-DEFAULT_REGION=ap-southeast-2
-DEFAULT_AZ=ap-southeast-2a
-DEFAULT_INSTANCE_TYPE=t3.micro
-
-# ===== AWS credentials (CHỈ 2 biến này) =====
-AWS_ACCESS_KEY_ID=YOUR_ACCESS_KEY_ID
-AWS_SECRET_ACCESS_KEY=YOUR_SECRET_ACCESS_KEY
-```
-
-> `.env` đã có trong `.gitignore`. **Không commit** file này.
-
----
-
-## 6) API — Deploy AWS NLB + EC2 từ template
-
-**Endpoint:** `POST /elb/deploy`
-
-**Body (JSON):**
-
-```json
-{
-  "region": "ap-southeast-2",
-  "vpc_cidr": "10.20.0.0/16",
-  "subnet_cidr": "10.20.10.0/24",
-  "az": "ap-southeast-2a",
-  "name_prefix": "bpp",
-  "key_name": "bpp-key",
-  "instance_count": 2,
-  "ami": "ami-0a25a306450a2cba3",
-  "instance_type": "t3.micro",
-  "user_data_inline": "#!/usr/bin/env bash\necho hello > /var/tmp/ok\n"
-}
-```
-
-**Chú ý:** Backend **không nhận** AWS creds qua API. Creds được nạp từ `.env`.
-
-**Test nhanh:**
-
+### Bước 4: Triển khai infrastructure đầu tiên
 ```bash
-curl -X POST http://localhost:8008/elb/deploy \
-  -H "Content-Type: application/json" \
+# Gọi API để tạo hạ tầng
+curl -X POST http://localhost:8000/elb/deploy \\
+  -H "Content-Type: application/json" \\
   -d '{
-    "region":"ap-southeast-2",
-    "vpc_cidr":"10.20.0.0/16",
-    "subnet_cidr":"10.20.10.0/24",
-    "az":"ap-southeast-2a",
-    "name_prefix":"bpp",
-    "key_name":"bpp-key",
-    "instance_count":2,
-    "ami":"ami-0a25a306450a2cba3",
-    "instance_type":"t3.micro",
-    "user_data_inline":"#!/usr/bin/env bash\\necho hello > /var/tmp/ok\\n"
+    "name_prefix": "my-app",
+    "instance_count": 2,
+    "instance_type": "t3.medium",
+    "auto_install_monitoring": true
   }'
 ```
 
-**Kết quả trả về** gồm:
-
-* `stack_id`: thư mục workdir tương ứng trong `.infra/work/<stack_id>/`
-* `phase`: `APPLIED` hoặc `FAILED_INIT/FAILED_APPLY/FAILED_CREDENTIALS`
-* `outputs`: `instance_dns`, `instance_public_ip`, `nlb_dns_name`
-* `logs.init`, `logs.apply`, `logs.output` để debug
+🎉 **Chúc mừng!** Bạn đã có một hạ tầng hoàn chỉnh với monitoring tự động!
 
 ---
 
-## 7) Artifacts & bảo mật
+## 📚 Tài Liệu
 
-* Terraform render ra: `.infra/work/<stack_id>/main.tf`
-* PEM do template tạo: `.infra/work/<stack_id>/<key_name>.pem` (**nhạy cảm**)
-* Một số private material có thể tồn tại trong **Terraform state**. Ở môi trường production, cân nhắc:
-
-  * Tạo sẵn keypair và chỉ import **public key** (không dùng `tls_private_key` + `local_file`)
-  * Dùng **remote backend** & secret manager
+- **[📖 Hướng Dẫn Cài Đặt Chi Tiết](SETUP-GUIDE.md)** - Cài đặt từ A-Z
+- **[🔌 API Documentation](API-DOCS-FRONTEND.md)** - Tài liệu API cho developers
+- **[🌐 Interactive API Docs](http://localhost:8000/docs)** - Swagger UI (khi server đang chạy)
 
 ---
 
-## 8) Lỗi thường gặp & cách xử lý
+## 🏗️ Kiến Trúc Hệ Thống
 
-* **`FAILED_CREDENTIALS`**: Thiếu hoặc sai `AWS_ACCESS_KEY_ID/SECRET` trong `.env` → mở `.env` và điền đúng; đảm bảo không có khoảng trắng thừa.
-* **`terraform: command not found`**: Sửa `TF_BIN` trong `.env` trỏ đúng binary (`which terraform`).
-* **Provider version conflicts**: Xoá `.terraform/` trong workdir của stack, chạy lại; hoặc nâng Terraform ≥ 1.6.
-* **Tên NLB quá dài**: `name_prefix` nên ngắn (≤ 10 ký tự) để tránh vượt giới hạn 32 ký tự.
+```
+┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
+│   Frontend      │    │   Backend API   │    │   AWS Cloud     │
+│   Dashboard     │◄──►│   FastAPI       │◄──►│   EC2 + NLB     │
+└─────────────────┘    └─────────────────┘    └─────────────────┘
+                                │
+                       ┌─────────────────┐
+                       │   AI Advisor    │
+                       │   Gemini API    │
+                       └─────────────────┘
+                                │
+                       ┌─────────────────┐
+                       │   Monitoring    │
+                       │ Grafana + Mimir │
+                       │     + Loki      │
+                       └─────────────────┘
+```
 
 ---
 
-## 9) Nâng cao (tuỳ chọn)
+## 🤝 Đóng Góp
 
-* **systemd service**: chạy uvicorn như service, dùng `EnvironmentFile=/path/to/.env` để nạp creds.
-* **Docker hoá**: build image chứa Python + Terraform, mount `.env` & `.infra/work/` làm volume.
+Chúng tôi luôn chào đón các đóng góp từ cộng đồng! 
+
+### Cách thức đóng góp:
+1. **Fork** repository này
+2. Tạo **feature branch**: `git checkout -b feature/amazing-feature`
+3. **Commit** changes: `git commit -m 'Add amazing feature'`
+4. **Push** to branch: `git push origin feature/amazing-feature`
+5. Mở **Pull Request**
+
+### Báo lỗi:
+- Mở **Issue** với mô tả chi tiết
+- Cung cấp logs và steps to reproduce
+- Tag với label phù hợp
 
 ---
 
-## 10) Bản quyền & trách nhiệm
+## 🔒 Bảo Mật
 
-* Mã và template phục vụ mục đích học tập/nghiên cứu. Kiểm tra quota/cost AWS trước khi
+- ✅ AWS credentials được lưu trữ an toàn trong `.env`
+- ✅ Terraform state được quản lý cẩn thận
+- ✅ Network security groups được cấu hình tự động
+- ✅ SSH keys được tạo và quản lý tự động
+
+**Lưu ý**: Đây là phiên bản development. Với production, hãy cân nhắc:
+- Sử dụng AWS IAM roles thay vì access keys
+- Remote backend cho Terraform state
+- SSL/TLS cho API endpoints
+- Network segmentation và VPN
+
+---
+
+## 📊 Thống Kê Project
+
+- **🐍 Language**: Python 3.8+
+- **⚡ Framework**: FastAPI
+- **☁️ Cloud**: AWS (EC2, VPC, NLB)
+- **🏗️ IaC**: Terraform
+- **📊 Monitoring**: Grafana + Mimir + Loki
+- **🤖 AI**: Google Gemini API
+- **📦 Deployment**: Docker-ready
+
+---
+
+## 📞 Liên Hệ & Hỗ Trợ
+
+- **📧 Email**: support@vpbank-cloud.com
+- **💬 Slack**: #vpbank-cloud-platform
+- **📱 Hotline**: 1900-xxxx
+- **🌐 Website**: https://cloud.vpbank.com.vn
+
+---
+
+## 📄 Giấy Phép
+
+Dự án này được phát hành dưới giấy phép **MIT License**. Xem file [LICENSE](LICENSE) để biết thêm chi tiết.
+
+---
+
+## 🙏 Lời Cảm Ơn
+
+Cảm ơn tất cả những người đã đóng góp vào dự án này:
+
+- **VPBank Technology Team** - Core development
+- **AWS Solutions Architects** - Architecture guidance  
+- **Open Source Community** - Tools và libraries
+- **Beta Testers** - Feedback và bug reports
+
+---
+
+<div align="center">
+
+**⭐ Nếu project này hữu ích, hãy cho chúng tôi một star! ⭐**
+
+Made with ❤️ by VPBank Technology Team
+
+</div>

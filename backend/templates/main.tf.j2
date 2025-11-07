@@ -167,6 +167,10 @@ output "instance_public_ip" {
   value = aws_instance.bpp_instance[*].public_ip
 }
 
+output "instance_ids" {
+  value = aws_instance.bpp_instance[*].id
+}
+
 output "nlb_dns_name" {
   value = aws_lb.bpp_lb.dns_name
 }
