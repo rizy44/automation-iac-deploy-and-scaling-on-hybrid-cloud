@@ -138,9 +138,16 @@ def scale(req: ScaleRequest):
         )
         
         if not result.get("success"):
+            # Propagate terraform logs to client for easier debugging
             raise HTTPException(
                 status_code=500,
-                detail=result.get("error", "Scaling failed")
+                detail={
+                    "error": result.get("error", "Scaling failed"),
+                    "stack_id": req.stack_id,
+                    "logs": result.get("logs", {}),
+                    "old_count": result.get("old_count"),
+                    "target_count": result.get("target_count")
+                }
             )
         
         return result

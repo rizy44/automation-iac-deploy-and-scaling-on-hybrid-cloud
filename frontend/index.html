@@ -21,6 +21,7 @@
           <a class="nav-item" href="#">Dashboard</a>
           <a class="nav-item active" href="#">New Project</a>
           <a class="nav-item" href="./management.html">Management</a>
+          <a class="nav-item" href="./scaling.html">Scaling</a>
         </nav>
       </aside>
 
@@ -72,6 +73,13 @@
               </label>
             </div>
 
+            <div class="form-row two-cols">
+              <label class="field">
+                <span>Instance count</span>
+                <input id="instanceCount" type="number" min="1" step="1" value="2" required />
+              </label>
+            </div>
+
             <div class="form-row">
               <div class="ai-card">
                 <div class="ai-header">
@@ -84,6 +92,14 @@
                     <label class="field">
                       <span>Recommended instance type</span>
                       <input id="recommendation" type="text" placeholder="— waiting for inputs —" readonly />
+                    </label>
+                    <label class="field">
+                      <span>Override instance type (optional)</span>
+                      <select id="instanceTypeSelect">
+                        <option value="">Use recommended</option>
+                        <option value="t3.micro">t3.micro</option>
+                        <option value="t3.medium">t3.medium</option>
+                      </select>
                     </label>
                   </div>
                   <p id="rationale" class="rationale"></p>

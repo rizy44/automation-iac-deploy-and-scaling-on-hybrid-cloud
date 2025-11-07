@@ -6,8 +6,10 @@
   const vcpuEl = document.getElementById('vcpu');
   const memoryEl = document.getElementById('memory');
   const storageEl = document.getElementById('storage');
+  const instanceCountEl = document.getElementById('instanceCount');
   const recommendBtn = document.getElementById('recommendBtn');
   const recommendationEl = document.getElementById('recommendation');
+  const instanceTypeSelect = document.getElementById('instanceTypeSelect');
   const rationaleEl = document.getElementById('rationale');
   const formEl = document.getElementById('projectForm');
   const deployResult = document.getElementById('deployResult');
@@ -64,7 +66,10 @@
     const storageHeavy = storageGb >= 500;
 
     let family = 'm5'; // general purpose default
-    if (storageHeavy) {
+    // Prefer burstable t3 for very small workloads
+    if (!storageHeavy && vcpu <= 2 && memoryGb <= 4) {
+      family = 't3';
+    } else if (storageHeavy) {
       family = 'i3'; // storage-optimized (NVMe)
     } else if (memPerVcpu > 6) {
       family = 'r5'; // memory-optimized
@@ -83,7 +88,7 @@
       : '12xlarge';
 
     // Approx memory per vCPU model (GB)
-    const memPerVcpuByFamily = { c5: 2, m5: 4, r5: 8, i3: 8 };
+    const memPerVcpuByFamily = { t3: 4, c5: 2, m5: 4, r5: 8, i3: 8 };
     const approxPerVcpu = memPerVcpuByFamily[family] || 4;
     const approxMemoryForSize = (label) => {
       const vcpuForLabel = { large: 2, xlarge: 4, '2xlarge': 8, '4xlarge': 16, '8xlarge': 32, '12xlarge': 48 }[label] || 2;
@@ -174,16 +179,17 @@
 
       const projectName = document.getElementById('projectName').value.trim();
       const region = regionEl.value;
-      const instanceType = recommendationEl.value || 't3.micro';
+      const instanceType = (instanceTypeSelect && instanceTypeSelect.value) || recommendationEl.value || 't3.micro';
       const az = computeAz(region);
 
+      const instanceCount = Math.max(1, parseInt(instanceCountEl && instanceCountEl.value, 10) || 2);
       const payload = {
         region,
         vpc_cidr: '10.25.0.0/16',
         subnet_cidr: '10.25.1.0/24',
         az,
         name_prefix: projectName || 'proj',
-        instance_count: 2,
+        instance_count: instanceCount,
         ami: 'ami-0a25a306450a2cba3',
         instance_type: instanceType,
         user_data_inline: null,
