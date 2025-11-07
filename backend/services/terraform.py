@@ -36,6 +36,38 @@ def write_user_data_if_inline(workdir: Path, user_data_inline: Optional[str]) ->
     p.write_text(user_data_inline, encoding="utf-8")
     return str(p)
 
+def project_name_exists(name_prefix: str) -> bool:
+    """
+    Check if project (stack) with this name_prefix already exists
+    
+    Args:
+        name_prefix: Project name to check
+    
+    Returns:
+        True if project exists, False otherwise
+    """
+    tf_root = settings.TF_WORK_ROOT
+    
+    if not tf_root.exists():
+        return False
+    
+    for stack_dir in tf_root.iterdir():
+        if not stack_dir.is_dir():
+            continue
+        
+        metadata_file = stack_dir / "deploy_metadata.json"
+        if metadata_file.exists():
+            try:
+                with open(metadata_file, 'r') as f:
+                    metadata = json.load(f)
+                    if metadata.get("context", {}).get("name_prefix") == name_prefix:
+                        return True
+            except Exception:
+                pass
+    
+    return False
+
+
 def build_aws_env(region: str) -> Dict[str, str]:
     # Chỉ dùng 2 biến từ .env
     if not (settings.AWS_ACCESS_KEY_ID and settings.AWS_SECRET_ACCESS_KEY):
@@ -98,10 +130,22 @@ def deploy_aws_from_template(payload: Dict[str, Any]) -> Dict[str, Any]:
     """
     payload KHÔNG chứa creds.
     Cần các tham số infra:
-      region, vpc_cidr, subnet_cidr, az, name_prefix, key_name,
+      region, vpc_cidr, subnet_cidr, az, name_prefix, key_name (deprecated, not used),
       instance_count, ami, instance_type, user_data_inline/user_data_path
       auto_install_monitoring (bool): tự cài Grafana+Mimir+Loki nếu không có user_data_inline
+    
+    Keypairs sẽ được tạo tự động: <name_prefix>-vm-1, <name_prefix>-vm-2, ...
     """
+    name_prefix = payload.get("name_prefix", "")
+    
+    # Check if project name already exists
+    if project_name_exists(name_prefix):
+        return {
+            "phase": "FAILED_INIT",
+            "error": f"Project '{name_prefix}' already exists. Use a different name_prefix.",
+            "stack_id": None
+        }
+    
     stack_id = new_stack_id()
     workdir = settings.TF_WORK_ROOT / stack_id
     workdir.mkdir(parents=True, exist_ok=True)
@@ -185,7 +229,32 @@ memberlist:
     - mimir
 EOF
 
-# 5) Tạo docker-compose.yml
+# 5) Setup Grafana Provisioning Folder
+mkdir -p /etc/grafana/provisioning/datasources
+
+# 5a) Tạo datasources.yml theo Grafana official format
+cat >/etc/grafana/provisioning/datasources/datasources.yml <<'EOF'
+apiVersion: 1
+
+datasources:
+  - name: Mimir
+    type: prometheus
+    url: http://mimir:9009/prometheus
+    access: proxy
+    isDefault: true
+    editable: true
+    jsonData:
+      prometheusVersion: latest
+
+  - name: Loki
+    type: loki
+    url: http://loki:3100
+    access: proxy
+    isDefault: false
+    editable: true
+EOF
+
+# 5b) Tạo docker-compose.yml
 cat >/opt/monitoring/docker-compose.yml <<'EOF'
 version: "3.8"
 services:
@@ -200,6 +269,7 @@ services:
       - GF_USERS_ALLOW_SIGN_UP=false
     volumes:
       - grafana-data:/var/lib/grafana
+      - /etc/grafana/provisioning/datasources:/etc/grafana/provisioning/datasources:ro
 
   loki:
     image: grafana/loki:2.9.6
@@ -260,7 +330,14 @@ EOF
 ln -sf /etc/nginx/sites-available/monitoring /etc/nginx/sites-enabled/default
 nginx -t && systemctl reload nginx
 
-echo "Monitoring stack ready: Grafana (admin/admin), Loki (/loki), Mimir (/mimir)"
+echo "✅ Monitoring stack ready!"
+echo "   Grafana: http://localhost:3000 (admin/admin)"
+echo "   Loki API: http://localhost:3100"
+echo "   Mimir API: http://localhost:9009"
+echo ""
+echo "✅ Grafana Datasources auto-provisioned:"
+echo "   - Mimir (Prometheus): http://mimir:9009/prometheus"
+echo "   - Loki: http://loki:3100"
 """
 
     user_data_path = payload.get("user_data_path")
@@ -282,7 +359,6 @@ echo "Monitoring stack ready: Grafana (admin/admin), Loki (/loki), Mimir (/mimir
         "subnet_cidr":     payload["subnet_cidr"],
         "az":              payload["az"],
         "name_prefix":     payload["name_prefix"],
-        "key_name":        payload["key_name"],
         "instance_count":  int(payload["instance_count"]),
         "ami":             payload["ami"],
         "instance_type":   payload.get("instance_type", settings.DEFAULT_INSTANCE_TYPE),
@@ -307,8 +383,44 @@ echo "Monitoring stack ready: Grafana (admin/admin), Loki (/loki), Mimir (/mimir
     except RuntimeError as e:
         return {"phase": "FAILED_CREDENTIALS", "error": str(e), "stack_id": stack_id}
 
+    # Create keypairs for all instances before terraform apply
+    from .keypair_manager import create_keypair_for_instance
+    
+    instance_count = int(payload["instance_count"])
+    keypairs_created = {}
+    keypairs_failed = []
+    
+    for i in range(1, instance_count + 1):
+        result = create_keypair_for_instance(
+            stack_id=stack_id,
+            instance_index=i,
+            name_prefix=name_prefix,
+            region=region
+        )
+        if result.get("success"):
+            keypairs_created[f"{name_prefix}-vm-{i}"] = {
+                "key_name": result["key_name"],
+                "key_id": result.get("key_id"),
+                "pem_path": result["pem_path"]
+            }
+        else:
+            keypairs_failed.append({
+                "key_name": result.get("key_name"),
+                "error": result.get("error")
+            })
+    
+    # If any keypair creation failed, return error
+    if keypairs_failed:
+        return {
+            "phase": "FAILED_KEYPAIR_CREATION",
+            "error": f"Failed to create {len(keypairs_failed)} keypairs",
+            "failed_keypairs": keypairs_failed,
+            "stack_id": stack_id
+        }
+
     res = tf_init_apply(workdir, aws_env)
     res["stack_id"] = stack_id
+    res["keypairs_created"] = keypairs_created
     return res
 
 

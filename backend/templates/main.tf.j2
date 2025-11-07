@@ -78,22 +78,14 @@ resource "aws_security_group" "bpp_security_group" {
   tags = { Name = "{{ name_prefix }}-sg" }
 }
 
-# --- Key pair (tạo mới) ---
-resource "tls_private_key" "bpp_keypair" {
-  algorithm = "RSA"
-  rsa_bits  = 2048
-}
+# --- Key pairs (per-instance) - sẽ được tạo bởi backend qua Boto3 ---
+# Backend sẽ tạo keypairs: {{ name_prefix }}-vm-1, {{ name_prefix }}-vm-2, ...
+# và import public keys vào AWS trước khi terraform apply
 
-resource "aws_key_pair" "bpp_keypair" {
-  key_name   = "{{ key_name }}"
-  public_key = tls_private_key.bpp_keypair.public_key_openssh
-}
-
-# Ghi private key ra file cạnh main.tf (cẩn trọng state!)
-resource "local_file" "private_key_pem" {
-  content         = tls_private_key.bpp_keypair.private_key_pem
-  filename        = "${path.module}/{{ key_name }}.pem"
-  file_permission = "0600"
+# Reference existing key pairs (created by backend)
+data "aws_key_pair" "bpp_keypair" {
+  for_each   = toset([for i in range({{ instance_count }}) : "{{ name_prefix }}-vm-${i + 1}"])
+  key_name   = each.value
 }
 
 # --- EC2 instances ---
@@ -101,14 +93,14 @@ resource "aws_instance" "bpp_instance" {
   count                       = {{ instance_count }}
   ami                         = "{{ ami }}"
   instance_type               = "{{ instance_type }}"
-  key_name                    = aws_key_pair.bpp_keypair.key_name
+  key_name                    = data.aws_key_pair.bpp_keypair["{{ name_prefix }}-vm-${count.index + 1}"].key_name
   subnet_id                   = aws_subnet.bpp_subnet.id
   vpc_security_group_ids      = [aws_security_group.bpp_security_group.id]
   associate_public_ip_address = true
   user_data                   = file("{{ user_data_path }}")
 
   tags = {
-    Name = "{{ name_prefix }}-${count.index + 1}"
+    Name = "{{ name_prefix }}-vm-${count.index + 1}"
   }
 }
 

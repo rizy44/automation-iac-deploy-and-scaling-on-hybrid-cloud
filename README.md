@@ -191,21 +191,6 @@ Chúng tôi luôn chào đón các đóng góp từ cộng đồng!
 
 ---
 
-## 📞 Liên Hệ & Hỗ Trợ
-
-- **📧 Email**: support@vpbank-cloud.com
-- **💬 Slack**: #vpbank-cloud-platform
-- **📱 Hotline**: 1900-xxxx
-- **🌐 Website**: https://cloud.vpbank.com.vn
-
----
-
-## 📄 Giấy Phép
-
-Dự án này được phát hành dưới giấy phép **MIT License**. Xem file [LICENSE](LICENSE) để biết thêm chi tiết.
-
----
-
 ## 🙏 Lời Cảm Ơn
 
 Cảm ơn tất cả những người đã đóng góp vào dự án này:
@@ -221,6 +206,6 @@ Cảm ơn tất cả những người đã đóng góp vào dự án này:
 
 **⭐ Nếu project này hữu ích, hãy cho chúng tôi một star! ⭐**
 
-Made with ❤️ by VPBank Technology Team
+Made with u1t-h1gh-3go
 
 </div>

@@ -84,6 +84,10 @@ def scale_stack(stack_id: str, target_count: int, reason: Optional[str] = None) 
     """
     Scale a stack to target_count instances by re-rendering Terraform and applying.
     
+    Automatically manages keypairs:
+    - Scale up: creates new keypairs for new instances
+    - Scale down: deletes keypairs for removed instances
+    
     Uses LIFO (Last In First Out) - Terraform terminates highest index instances first.
     
     Args:
@@ -94,6 +98,8 @@ def scale_stack(stack_id: str, target_count: int, reason: Optional[str] = None) 
     Returns:
         Dict with success status, old/new counts, logs
     """
+    from .keypair_manager import create_keypair_for_instance, delete_keypair_for_instance
+    
     workdir = settings.TF_WORK_ROOT / stack_id
     
     if not workdir.exists():
@@ -117,6 +123,8 @@ def scale_stack(stack_id: str, target_count: int, reason: Optional[str] = None) 
     # Get current and new counts
     context = metadata["context"]
     old_count = context.get("instance_count", 1)
+    name_prefix = context.get("name_prefix", "")
+    region = metadata.get("region", settings.DEFAULT_REGION)
     
     if old_count == target_count:
         return {
@@ -129,6 +137,50 @@ def scale_stack(stack_id: str, target_count: int, reason: Optional[str] = None) 
             "message": "Instance count already at target"
         }
     
+    # Manage keypairs
+    keypairs_added = []
+    keypairs_deleted = []
+    keypair_errors = []
+    
+    # Scale up: create keypairs for new instances
+    if target_count > old_count:
+        for i in range(old_count + 1, target_count + 1):
+            result = create_keypair_for_instance(
+                stack_id=stack_id,
+                instance_index=i,
+                name_prefix=name_prefix,
+                region=region
+            )
+            if result.get("success"):
+                keypairs_added.append(result["key_name"])
+            else:
+                keypair_errors.append(f"Failed to create {result.get('key_name')}: {result.get('error')}")
+    
+    # Scale down: delete keypairs for removed instances
+    elif target_count < old_count:
+        for i in range(target_count + 1, old_count + 1):
+            result = delete_keypair_for_instance(
+                stack_id=stack_id,
+                instance_index=i,
+                name_prefix=name_prefix,
+                region=region
+            )
+            if result.get("success"):
+                keypairs_deleted.append(result["key_name"])
+            else:
+                keypair_errors.append(f"Failed to delete {result.get('key_name')}: {result.get('error')}")
+    
+    # If there were keypair errors, return error (don't proceed with terraform)
+    if keypair_errors:
+        return {
+            "success": False,
+            "stack_id": stack_id,
+            "old_count": old_count,
+            "target_count": target_count,
+            "error": "Failed to manage keypairs",
+            "keypair_errors": keypair_errors
+        }
+    
     # Update context with new instance count
     context["instance_count"] = target_count
     
@@ -136,7 +188,6 @@ def scale_stack(stack_id: str, target_count: int, reason: Optional[str] = None) 
     render_tf(TEMPLATE_AWS_MAIN, context, workdir)
     
     # Apply Terraform
-    region = metadata.get("region", settings.DEFAULT_REGION)
     aws_env = build_aws_env(region=region)
     
     logs = {}
@@ -152,7 +203,9 @@ def scale_stack(stack_id: str, target_count: int, reason: Optional[str] = None) 
                 "logs": logs,
                 "stack_id": stack_id,
                 "old_count": old_count,
-                "target_count": target_count
+                "target_count": target_count,
+                "keypairs_added": keypairs_added,
+                "keypairs_deleted": keypairs_deleted
             }
     except Exception as e:
         return {
@@ -161,7 +214,9 @@ def scale_stack(stack_id: str, target_count: int, reason: Optional[str] = None) 
             "logs": logs,
             "stack_id": stack_id,
             "old_count": old_count,
-            "target_count": target_count
+            "target_count": target_count,
+            "keypairs_added": keypairs_added,
+            "keypairs_deleted": keypairs_deleted
         }
     
     # Update metadata with new context and scaling history
@@ -169,6 +224,20 @@ def scale_stack(stack_id: str, target_count: int, reason: Optional[str] = None) 
     metadata["context"] = context
     metadata["last_scaled_at"] = time.strftime("%Y-%m-%d %H:%M:%S")
     metadata["last_scale_reason"] = reason
+    
+    # Track scaling history
+    if "scaling_history" not in metadata:
+        metadata["scaling_history"] = []
+    
+    metadata["scaling_history"].append({
+        "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
+        "old_count": old_count,
+        "new_count": target_count,
+        "action": "scale_up" if target_count > old_count else "scale_down",
+        "reason": reason,
+        "keypairs_added": keypairs_added,
+        "keypairs_deleted": keypairs_deleted
+    })
     
     with open(metadata_file, 'w') as f:
         json.dump(metadata, f, indent=2)
@@ -183,6 +252,8 @@ def scale_stack(stack_id: str, target_count: int, reason: Optional[str] = None) 
         "reason": reason,
         "action": action,
         "logs": logs,
+        "keypairs_added": keypairs_added,
+        "keypairs_deleted": keypairs_deleted,
         "message": f"Successfully scaled from {old_count} to {target_count} instances"
     }
 

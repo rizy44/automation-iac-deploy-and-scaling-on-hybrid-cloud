@@ -8,6 +8,7 @@ from backend.api.elb import router as elb_router
 from backend.api.sdwan import router as sdwan_router
 from backend.api.scaling import router as scaling_router
 from backend.api.ec2 import router as ec2_router
+from backend.api.terminal import router as terminal_router
 from backend.services.scheduler import start_scheduler, stop_scheduler
 
 app = FastAPI(
@@ -19,6 +20,7 @@ app.include_router(elb_router)
 app.include_router(sdwan_router)
 app.include_router(scaling_router)
 app.include_router(ec2_router)
+app.include_router(terminal_router)
 
 
 @app.on_event("startup")
