@@ -73,7 +73,7 @@ body {
 .form-row.three-cols { grid-template-columns: 1fr 1fr 1fr; }
 .field { display: grid; gap: 8px; }
 .field.full { grid-column: 1 / -1; }
-.field > span { color: #ffffff; font-weight: 600; font-size: 14px; }
+.field > span { color: #00c479; font-weight: 600; font-size: 14px; }
 .field input, .field select { height: 44px; padding: 0 14px; border-radius: 12px; border: 1px solid var(--border); background: var(--surface); box-shadow: var(--shadow); outline: none; }
 
 .btn { height: 46px; border-radius: 999px; border: none; padding: 0 18px; cursor: pointer; font-weight: 600; letter-spacing: 0.3px; }
@@ -106,5 +106,29 @@ body {
 .management-page .form { max-width: 1280px; }
 .management-page .ai-body { overflow-x: auto; }
 .management-page td:last-child { white-space: nowrap; }
+
+/* Dashboard dark theme */
+.dashboard-page .title { color: #000000; }
+.dashboard-page .form { max-width: 1280px; }
+.grid-cards { display:grid; grid-template-columns: repeat(4, 1fr); gap:16px; }
+.grid-2col { display:grid; grid-template-columns: 1fr 1fr; gap:16px; }
+.card-dark { background:#ffffffcc; border:1px solid var(--border); border-radius:16px; box-shadow: var(--shadow); overflow:hidden; backdrop-filter: blur(6px) saturate(120%); }
+.card-dark-header { padding:14px; border-bottom:1px solid var(--border); background:#f8fafccc; }
+.card-dark-body { padding:16px; color: #000000; }
+.kpi { padding:16px; }
+.kpi-label { color:#000000; font-size:14px; margin-bottom:8px; }
+.kpi-value { color:#000000; font-size:22px; font-weight:800; }
+.big-figure { font-size:32px; font-weight:800; color:#000000; }
+.table-dark { width:100%; border-collapse: collapse; color: #000000; }
+.table-dark th, .table-dark td { text-align:left; padding:8px; border-bottom:1px solid var(--border); }
+.saving-legend { display:flex; gap:18px; margin-top:10px; color:#000000; }
+.saving-legend > div { display:grid; }
+.saving-legend > div > strong { color:#000000; }
+.gauge { width:180px; height:180px; margin:0 auto; border-radius:999px; background:
+  conic-gradient(#22c55e calc(var(--p,0) * 1%), #1f2937 0);
+  display:grid; place-items:center;
+}
+.gauge-inner { width:140px; height:140px; background:#ffffff; border-radius:999px; display:grid; place-items:center; color:#000000; font-weight:800; font-size:26px; }
+.dashboard-page .card-dark-header .ai-title { color:#000000 !important; }
 
 

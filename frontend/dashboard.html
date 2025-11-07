@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="vi">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Dashboard - VPBank Cloud</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body class="dashboard-page">
+    <div class="app">
+      <aside class="sidebar">
+        <div class="brand">
+          <img src="./vpbank.png" alt="VPBank" class="logo-vp" />
+        </div>
+
+        <nav class="nav">
+          <a class="nav-item active" href="#">Dashboard</a>
+          <a class="nav-item" href="./index.html">New Project</a>
+          <a class="nav-item" href="./management.html">Management</a>
+          <a class="nav-item" href="./scaling.html">Scaling</a>
+        </nav>
+      </aside>
+
+      <main class="content">
+        <header class="topbar">
+          <input type="search" class="search" placeholder="Search" />
+        </header>
+
+        <section class="page">
+          <h1 class="title" style="color:#e5e7eb;">DASHBOARD</h1>
+
+          <div class="form" style="margin-top:0;">
+            <div class="grid-cards">
+              <div class="card-dark kpi">
+                <div class="kpi-label">Billing this month</div>
+                <div class="kpi-value" id="kpiBilling">$0</div>
+              </div>
+              <div class="card-dark kpi">
+                <div class="kpi-label">Estimated savings</div>
+                <div class="kpi-value" id="kpiSavings">$0</div>
+              </div>
+              <div class="card-dark kpi">
+                <div class="kpi-label">Today's bill</div>
+                <div class="kpi-value" id="kpiToday">$0</div>
+              </div>
+              <div class="card-dark kpi">
+                <div class="kpi-label">Efficiency</div>
+                <div class="kpi-value" id="kpiEfficiency">0%</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="form" style="margin-top:16px;">
+            <div class="grid-2col">
+              <div class="card-dark">
+                <div class="card-dark-header">
+                  <div class="ai-title" style="color:#000000;">Total Saving Recorded</div>
+                </div>
+                <div class="card-dark-body">
+                  <div class="big-figure" id="totalSavings">$0</div>
+                  <div style="margin-top:8px; color:#000000;">Welcome back,</div>
+                  <div style="color:#000000; font-weight:700; margin-bottom:8px;">Cloud Admin</div>
+                  <div style="color:#000000;">Glad to see you again! Ask me anything.</div>
+                </div>
+              </div>
+
+              <div class="card-dark">
+                <div class="card-dark-header">
+                  <div class="ai-title" style="color:#e5e7eb;">Resource Utilization</div>
+                </div>
+                <div class="card-dark-body">
+                  <div class="gauge" id="utilGauge">
+                    <div class="gauge-inner"><span id="utilPercent">0%</span></div>
+                  </div>
+                  <div style="text-align:center; color:#9ca3af; margin-top:6px;">Across all projects</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="form" style="margin-top:16px;">
+            <div class="grid-2col">
+              <div class="card-dark">
+                <div class="card-dark-header">
+                  <div class="ai-title" style="color:#e5e7eb;">Actions</div>
+                </div>
+                <div class="card-dark-body">
+                  <table class="table-dark">
+                    <thead>
+                      <tr>
+                        <th>Action</th>
+                        <th style="width:140px;">Est. saving</th>
+                        <th style="width:140px;">Effect</th>
+                        <th style="width:80px;"></th>
+                      </tr>
+                    </thead>
+                    <tbody id="actionsTable">
+                      <tr><td>EC2 Rightsizing</td><td>$3,200</td><td>65%</td><td><button class="btn btn-secondary">Run</button></td></tr>
+                      <tr><td>Idle Instance Detection</td><td>$450</td><td>25%</td><td><button class="btn btn-secondary">Run</button></td></tr>
+                      <tr><td>Security Group Audit</td><td>$1,200</td><td>40%</td><td><button class="btn btn-secondary">Run</button></td></tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              <div class="card-dark">
+                <div class="card-dark-header">
+                  <div class="ai-title" style="color:#e5e7eb;">Saving Report</div>
+                </div>
+                <div class="card-dark-body">
+                  <canvas id="barChart" width="560" height="240" style="width:100%; height:240px;"></canvas>
+                  <div class="saving-legend">
+                    <div><strong id="costCompute">$0</strong><span>Compute</span></div>
+                    <div><strong id="costStorage">$0</strong><span>Storage</span></div>
+                    <div><strong id="costDb">$0</strong><span>Databases</span></div>
+                    <div><strong id="costNet">$0</strong><span>Networking</span></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <script src="./dashboard.js"></script>
+  </body>
+  </html>
+
+
