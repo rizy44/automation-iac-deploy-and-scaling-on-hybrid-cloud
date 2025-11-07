@@ -1,4 +1,5 @@
 from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from uuid import uuid4
 from pathlib import Path
@@ -15,6 +16,13 @@ app = FastAPI(
     title="Hybrid Cloud Infrastructure API",
     description="API for deploying and managing hybrid cloud infrastructure on AWS and OpenStack with AI-powered auto-scaling",
     version="1.0.0"
+)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 app.include_router(elb_router)
 app.include_router(sdwan_router)

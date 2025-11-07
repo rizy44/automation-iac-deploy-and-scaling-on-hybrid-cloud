@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="vi">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>New Project - VPBank Cloud</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="app">
+      <aside class="sidebar">
+        <div class="brand">
+          <img src="./vpbank.png" alt="VPBank" class="logo-vp" />
+        </div>
+       
+
+        <nav class="nav">
+          <a class="nav-item" href="#">Dashboard</a>
+          <a class="nav-item active" href="#">New Project</a>
+        </nav>
+      </aside>
+
+      <main class="content">
+        <header class="topbar">
+          <input type="search" class="search" placeholder="Search" />
+        </header>
+
+        <section class="page">
+          <h1 class="title">NEW PROJECT</h1>
+
+          <form class="form" id="projectForm">
+            <div class="form-row">
+              <label class="field full">
+                <span>Project name</span>
+                <input id="projectName" type="text" placeholder="Enter project name" required />
+              </label>
+            </div>
+
+            <div class="form-row two-cols">
+              <label class="field">
+                <span>Cloud provider</span>
+                <select id="provider" required>
+                  <option value="aws" selected>AWS</option>
+                  <option value="azure">OpenStack</option>
+                </select>
+              </label>
+
+              <label class="field">
+                <span>Region</span>
+                <select id="region" required></select>
+              </label>
+            </div>
+
+            <div class="form-row three-cols">
+              <label class="field">
+                <span>vCPU</span>
+                <input id="vcpu" type="number" min="1" step="1" placeholder="e.g. 4" required />
+              </label>
+
+              <label class="field">
+                <span>Memory (GB)</span>
+                <input id="memory" type="number" min="1" step="1" placeholder="e.g. 16" required />
+              </label>
+
+              <label class="field">
+                <span>Storage (GB)</span>
+                <input id="storage" type="number" min="8" step="1" placeholder="e.g. 100" required />
+              </label>
+            </div>
+
+            <div class="form-row">
+              <div class="ai-card">
+                <div class="ai-header">
+                  <div class="ai-title">Instance type recommendation</div>
+        
+                </div>
+
+                <div class="ai-body">
+                  <div class="ai-result">
+                    <label class="field">
+                      <span>Recommended instance type</span>
+                      <input id="recommendation" type="text" placeholder="— waiting for inputs —" readonly />
+                    </label>
+                  </div>
+                  <p id="rationale" class="rationale"></p>
+                </div>
+              </div>
+            </div>
+
+            <div class="form-row">
+              <button class="btn btn-primary submit" type="submit">SUBMIT</button>
+            </div>
+          </form>
+
+          <div class="form" id="deployResult" style="display:none; margin-top: 12px;">
+            <div class="ai-card">
+              <div class="ai-header">
+                <div class="ai-title">Deployment Result</div>
+              </div>
+              <div class="ai-body" id="deployResultBody"></div>
+            </div>
+          </div>
+
+          <div class="form" id="projectsSection" style="margin-top: 16px;">
+            <div class="ai-card">
+              <div class="ai-header">
+                <div class="ai-title">Active Projects</div>
+                <button class="btn btn-secondary" id="refreshProjects" type="button">Refresh</button>
+              </div>
+              <div class="ai-body">
+                <ul id="projectsList" style="margin:0; padding-left: 18px;"></ul>
+              </div>
+            </div>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <script src="./app.js"></script>
+  </body>
+  </html>
+
+
